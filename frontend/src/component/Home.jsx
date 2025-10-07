@@ -1,11 +1,15 @@
-import React, { useState } from "react";
+import React, { use, useState } from "react";
 import { motion } from "framer-motion";
+import { v4 as uuid } from "uuid";
+import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 
 const Home = () => {
   const [formData, setFormData] = useState({
     roomId: "",
     username: "",
   });
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({
@@ -16,12 +20,33 @@ const Home = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData.roomId || !formData.username) {
+      toast.error("ROOM ID & username is required");
+      return;
+    }
+    // Redirect to editor page
+    navigate(`/editor/${formData.roomId}`, {
+      state: {
+        username: formData.username,
+      },
+    });
+    toast.success("Room created successfully");
+
     console.log("Joining room:", formData);
     // Add your room joining logic here
   };
 
-  const handleCreateNewRoom = () => {
-    console.log("Creating new room");
+  const handleCreateNewRoom = (e) => {
+    e.preventDefault();
+    const id = uuid();
+    setFormData({
+      ...formData,
+      roomId: id,
+    });
+
+    toast.success("Created a new room");
+
+    console.log("Creating new room:", id);
     // Add your new room creation logic here
   };
 
