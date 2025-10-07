@@ -63,7 +63,7 @@ const Home = () => {
             >
               {/* Replace with your logo */}
               <img
-                src="../../public/images/SmallSquareLogoJpg.png"
+                src="../../images/SmallSquareLogoJpg.png"
                 alt="Logo"
                 className="w-10 h-10 object-contain"
               />

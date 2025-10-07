@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Play,
@@ -11,7 +11,16 @@ import {
   Monitor,
   Smartphone,
   Tablet,
+  Code,
 } from "lucide-react";
+import "codemirror/lib/codemirror.css";
+import "codemirror/theme/dracula.css";
+import "codemirror/mode/javascript/javascript";
+import "codemirror/mode/python/python";
+import "codemirror/mode/clike/clike";
+import "codemirror/addon/edit/closebrackets";
+import "codemirror/addon/edit/closetag";
+import CodeMirror from "codemirror";
 
 const EditorPage = () => {
   const [code, setCode] = useState(
@@ -28,7 +37,24 @@ const EditorPage = () => {
     "Mike",
   ]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const codeEditorRef = useRef(null);
+  const editorRef = useRef(null);
+  useEffect(() => {
+    const init = async () => {
+      const editor = CodeMirror.fromTextArea(
+        document.getElementById("realTimeEditor"),
+        {
+          mode: { name: "javascript", json: true },
+          theme: "dracula",
+          autoCloseTags: true,
+          autoCloseBrackets: true,
+          lineNumbers: true,
+          lineWrapping: true,
+        }
+      );
+      // editor.setSize("null", "100%");
+    };
+    init();
+  }, []);
 
   const languages = [
     "javascript",
@@ -252,7 +278,7 @@ const EditorPage = () => {
             </div>
             <div className="flex-1 p-4">
               <textarea
-                ref={codeEditorRef}
+                id="realTimeEditor"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 style={{ fontSize: `${fontSize}px` }}
