@@ -21,6 +21,14 @@ import "codemirror/mode/clike/clike";
 import "codemirror/addon/edit/closebrackets";
 import "codemirror/addon/edit/closetag";
 import CodeMirror from "codemirror";
+import { initSocket } from "../Socket";
+import {
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+import { toast } from "react-hot-toast";
 
 const EditorPage = () => {
   const [code, setCode] = useState(
@@ -30,14 +38,42 @@ const EditorPage = () => {
   const [language, setLanguage] = useState("javascript");
   const [theme, setTheme] = useState("dark");
   const [fontSize, setFontSize] = useState(14);
-  const [activeUsers, setActiveUsers] = useState([
-    "You",
-    "John",
-    "Sarah",
-    "Mike",
-  ]);
+  const [activeUsers, setActiveUsers] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const editorRef = useRef(null);
+  const location = useLocation();
+  const { roomId } = useParams();
+  const navigate = useNavigate();
+
+  const socketRef = useRef(null);
+
+  console.log("Room ID:", roomId);
+  console.log("Username:", location.state?.username);
+  useEffect(() => {
+    const init = async () => {
+      socketRef.current = await initSocket();
+      socketRef.current.on("connect_error", (err) => handleError(err));
+      socketRef.current.on("connect_failed", (err) => handleError(err));
+
+      const handleError = (err) => {
+        console.error("Socket connection error:", err);
+        toast.error("Socket connection failed, try again later.");
+        navigate("/");
+      };
+
+      socketRef.current.emit("join", {
+        roomId,
+        username: location.state?.username,
+      });
+      socketRef.current.on("joined", ({ clients, username, socketId }) => {
+        if (username !== location.state?.username) {
+          toast.success(`${username} joined the room.`);
+          console.log(`${username} joined`);
+        }
+      });
+    };
+    init();
+  });
+
   useEffect(() => {
     const init = async () => {
       const editor = CodeMirror.fromTextArea(
@@ -55,6 +91,10 @@ const EditorPage = () => {
     };
     init();
   }, []);
+
+  if (!location.state) {
+    return <Navigate to="/" />;
+  }
 
   const languages = [
     "javascript",
