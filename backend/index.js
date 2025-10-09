@@ -14,7 +14,7 @@ const getAllConnectedClients = (roomId) => {
     (socketId) => {
       return {
         socketId,
-        userName: userSocketMap[socketId],
+        username: userSocketMap[socketId],
       };
     }
   );
@@ -36,6 +36,26 @@ io.on("connection", (socket) => {
         socketId: socket.id,
       });
     });
+  });
+
+  socket.on("code-change", ({ roomId, code }) => {
+    socket.in(roomId).emit("code-change", { code });
+  });
+
+  socket.on("sync-code", ({ socketId, code }) => {
+    io.to(socketId).emit("sync-code", { code });
+  });
+
+  socket.on("disconnecting", () => {
+    const rooms = [...socket.rooms];
+    rooms.forEach((roomId) => {
+      socket.to(roomId).emit("disconnected", {
+        socketId: socket.id,
+        username: userSocketMap[socket.id],
+      });
+    });
+    delete userSocketMap[socket.id];
+    socket.leave();
   });
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, use } from "react";
 import { motion } from "framer-motion";
 import {
   Play,
@@ -45,20 +45,20 @@ const EditorPage = () => {
   const navigate = useNavigate();
 
   const socketRef = useRef(null);
+  const editorRef = useRef(null);
 
   console.log("Room ID:", roomId);
   console.log("Username:", location.state?.username);
   useEffect(() => {
     const init = async () => {
       socketRef.current = await initSocket();
-      socketRef.current.on("connect_error", (err) => handleError(err));
-      socketRef.current.on("connect_failed", (err) => handleError(err));
-
       const handleError = (err) => {
         console.error("Socket connection error:", err);
         toast.error("Socket connection failed, try again later.");
         navigate("/");
       };
+      socketRef.current.on("connect_error", (err) => handleError(err));
+      socketRef.current.on("connect_failed", (err) => handleError(err));
 
       socketRef.current.emit("join", {
         roomId,
@@ -67,12 +67,26 @@ const EditorPage = () => {
       socketRef.current.on("joined", ({ clients, username, socketId }) => {
         if (username !== location.state?.username) {
           toast.success(`${username} joined the room.`);
+          console.log(`${clients} names`);
           console.log(`${username} joined`);
         }
+        setActiveUsers(clients);
+      });
+      socketRef.current.on("disconnected", ({ socketId, username }) => {
+        toast.success(`${username} left the room.`);
+        setActiveUsers((prev) =>
+          prev.filter((client) => client.socketId !== socketId)
+        );
       });
     };
     init();
-  });
+
+    return () => {
+      socketRef.current?.disconnect();
+      socketRef.current.off("joined");
+      socketRef.current.off("disconnected");
+    };
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -87,10 +101,33 @@ const EditorPage = () => {
           lineWrapping: true,
         }
       );
-      // editor.setSize("null", "100%");
+
+      // store the editor instance
+      editorRef.current = editor;
+
+      // now attach event listener correctly
+      editor.on("change", (instance, changes) => {
+        console.log("Changes:", changes);
+        const { origin } = changes;
+        const code = instance.getValue();
+        if (origin !== "setValue") {
+          socketRef.current.emit("code-change", { roomId, code });
+        }
+      });
     };
     init();
   }, []);
+
+  useEffect(() => {
+    if (socketRef.current) {
+      socketRef.current.on("code-change", ({ code }) => {
+        if (code !== null) {
+          editorRef.current.setValue(code);
+          setCode(code);
+        }
+      });
+    }
+  }, [socketRef.current]);
 
   if (!location.state) {
     return <Navigate to="/" />;
@@ -182,7 +219,7 @@ const EditorPage = () => {
                     index === 0 ? "bg-green-400" : "bg-cyan-400"
                   }`}
                 />
-                <span className="text-gray-300">{user}</span>
+                <span className="text-gray-300">{user.username}</span>
                 {index === 0 && (
                   <span className="text-xs bg-cyan-500/20 text-cyan-300 px-2 py-1 rounded">
                     You
