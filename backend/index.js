@@ -43,7 +43,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sync-code", ({ socketId, code }) => {
-    io.to(socketId).emit("sync-code", { code });
+    io.to(socketId).emit("code-change", { code });
   });
 
   socket.on("disconnecting", () => {

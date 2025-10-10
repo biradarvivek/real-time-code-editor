@@ -31,9 +31,7 @@ import {
 import { toast } from "react-hot-toast";
 
 const EditorPage = () => {
-  const [code, setCode] = useState(
-    `// Welcome to CODECAST\nfunction helloWorld() {\n  console.log("Hello, collaborative coding!");\n  return "Real-time editing made easy";\n}`
-  );
+  const [code, setCode] = useState("");
   const [output, setOutput] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [theme, setTheme] = useState("dark");
@@ -46,9 +44,19 @@ const EditorPage = () => {
 
   const socketRef = useRef(null);
   const editorRef = useRef(null);
+  const codeRef = useRef(null);
 
   console.log("Room ID:", roomId);
   console.log("Username:", location.state?.username);
+
+  // Update font size when fontSize state changes
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.getWrapperElement().style.fontSize = `${fontSize}px`;
+      editorRef.current.refresh();
+    }
+  }, [fontSize]);
+
   useEffect(() => {
     const init = async () => {
       socketRef.current = await initSocket();
@@ -71,6 +79,10 @@ const EditorPage = () => {
           console.log(`${username} joined`);
         }
         setActiveUsers(clients);
+        socketRef.current.emit("sync-code", {
+          code: codeRef.current,
+          socketId,
+        });
       });
       socketRef.current.on("disconnected", ({ socketId, username }) => {
         toast.success(`${username} left the room.`);
@@ -89,6 +101,7 @@ const EditorPage = () => {
   }, []);
 
   useEffect(() => {
+    if (editorRef.current) return;
     const init = async () => {
       const editor = CodeMirror.fromTextArea(
         document.getElementById("realTimeEditor"),
@@ -110,6 +123,8 @@ const EditorPage = () => {
         console.log("Changes:", changes);
         const { origin } = changes;
         const code = instance.getValue();
+        codeRef.current = code;
+        setCode(code);
         if (origin !== "setValue") {
           socketRef.current.emit("code-change", { roomId, code });
         }
@@ -156,16 +171,19 @@ const EditorPage = () => {
   const handleCopyCode = async () => {
     try {
       await navigator.clipboard.writeText(code);
-      alert("Code copied to clipboard!");
+      toast.success("Code copied to clipboard!");
     } catch (err) {
-      console.error("Failed to copy code:", err);
+      toast.error("Failed to copy code.");
     }
   };
 
-  const handleShareRoom = () => {
-    const roomId = window.location.pathname.split("/").pop();
-    navigator.clipboard.writeText(`${window.location.origin}/join/${roomId}`);
-    alert("Room link copied to clipboard!");
+  const handleShareRoom = async () => {
+    try {
+      await navigator.clipboard.writeText(roomId);
+      toast.success("Room ID copied to clipboard!");
+    } catch (error) {
+      toast.error("Failed to copy Room ID.");
+    }
   };
 
   return (
@@ -175,7 +193,7 @@ const EditorPage = () => {
         initial={{ x: -300 }}
         animate={{ x: isSidebarOpen ? 0 : -300 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="w-80 bg-gray-800/30 backdrop-blur-lg border-r border-gray-700/50 flex flex-col"
+        className="w-80 bg-gray-800/30 backdrop-blur-lg border-r border-gray-700/50 flex flex-col overflow-y-auto custom-scrollbar"
       >
         {/* Room Info */}
         <div className="p-6 border-b border-gray-700/50">
@@ -222,7 +240,7 @@ const EditorPage = () => {
                 <span className="text-gray-300">{user.username}</span>
                 {index === 0 && (
                   <span className="text-xs bg-cyan-500/20 text-cyan-300 px-2 py-1 rounded">
-                    You
+                    admin
                   </span>
                 )}
               </div>
@@ -358,7 +376,6 @@ const EditorPage = () => {
                 id="realTimeEditor"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                style={{ fontSize: `${fontSize}px` }}
                 className="w-full h-full bg-gray-800/50 border border-gray-700 rounded-xl p-6 font-mono text-white resize-none focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
                 spellCheck="false"
               />
