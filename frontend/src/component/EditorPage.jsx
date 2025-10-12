@@ -12,6 +12,10 @@ import {
   Smartphone,
   Tablet,
   Code,
+  Loader,
+  LogOut,
+  PanelRightOpen,
+  PanelRightClose,
 } from "lucide-react";
 import "codemirror/lib/codemirror.css";
 import "codemirror/theme/dracula.css";
@@ -20,6 +24,11 @@ import "codemirror/mode/python/python";
 import "codemirror/mode/clike/clike";
 import "codemirror/addon/edit/closebrackets";
 import "codemirror/addon/edit/closetag";
+import "codemirror/theme/dracula.css";
+import "codemirror/theme/monokai.css";
+import "codemirror/theme/solarized.css";
+import "codemirror/theme/material.css";
+import "codemirror/theme/eclipse.css";
 import CodeMirror from "codemirror";
 import { initSocket } from "../Socket";
 import {
@@ -38,6 +47,7 @@ const EditorPage = () => {
   const [fontSize, setFontSize] = useState(14);
   const [activeUsers, setActiveUsers] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [loading, setLoading] = useState(false);
   const location = useLocation();
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -48,6 +58,58 @@ const EditorPage = () => {
 
   console.log("Room ID:", roomId);
   console.log("Username:", location.state?.username);
+
+  const getModeForLanguage = (lang) => {
+    switch (lang) {
+      case "javascript":
+        return { name: "javascript", json: true };
+      case "python":
+        return "python";
+      case "java":
+        return "text/x-java";
+      case "cpp":
+        return "text/x-c++src";
+      case "html":
+        return "htmlmixed";
+      case "css":
+        return "css";
+      case "typescript":
+        return "text/typescript";
+      case "php":
+        return "application/x-httpd-php";
+      default:
+        return "javascript";
+    }
+  };
+
+  const getThemeName = (theme) => {
+    switch (theme.toLowerCase()) {
+      case "dark":
+        return "material";
+      case "light":
+        return "eclipse";
+      case "dracula":
+        return "dracula";
+      case "monokai":
+        return "monokai";
+      default:
+        return "default";
+    }
+  };
+
+  useEffect(() => {
+    if (editorRef.current) {
+      const selectedTheme = getThemeName(theme);
+      editorRef.current.setOption("theme", selectedTheme);
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    if (editorRef.current) {
+      const newMode = getModeForLanguage(language);
+      editorRef.current.setOption("mode", newMode);
+    }
+  }, [language]);
 
   // Update font size when fontSize state changes
   useEffect(() => {
@@ -115,6 +177,9 @@ const EditorPage = () => {
         }
       );
 
+      editor.getWrapperElement().style.height = "100%";
+      editor.refresh();
+
       // store the editor instance
       editorRef.current = editor;
 
@@ -159,13 +224,49 @@ const EditorPage = () => {
     "php",
   ];
 
-  const themes = ["dark", "light", "monokai", "solarized", "dracula"];
+  const themes = ["dark", "light", "monokai", "dracula"];
 
-  const handleRunCode = () => {
-    // Simulate code execution
-    setOutput(
-      "Hello, collaborative coding!\nReal-time editing made easy\n✓ Code executed successfully"
-    );
+  const handleRunCode = async () => {
+    // For JavaScript, run locally
+    if (language === "javascript") {
+      setLoading(true);
+      try {
+        const result = eval(code); // sandbox not secure, but fine for local test
+        setOutput(String(result));
+        console.log("set output", result);
+      } catch (err) {
+        setOutput(String(err));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // For other languages → use Piston API
+    try {
+      setLoading(true);
+      const response = await fetch("https://emkc.org/api/v2/piston/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language: language === "cpp" ? "c++" : language,
+          version: "*",
+          files: [{ content: code }],
+        }),
+      });
+
+      const data = await response.json();
+      console.log("Piston response:", data);
+      if (data.run) {
+        setOutput(data.run.output || "No output");
+      } else {
+        setOutput("Error: Failed to execute code");
+      }
+    } catch (error) {
+      setOutput("Error running code: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCopyCode = async () => {
@@ -175,6 +276,10 @@ const EditorPage = () => {
     } catch (err) {
       toast.error("Failed to copy code.");
     }
+  };
+
+  const handleLeaveRoom = () => {
+    navigate("/");
   };
 
   const handleShareRoom = async () => {
@@ -189,123 +294,129 @@ const EditorPage = () => {
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white overflow-hidden">
       {/* Sidebar */}
-      <motion.div
-        initial={{ x: -300 }}
-        animate={{ x: isSidebarOpen ? 0 : -300 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="w-80 bg-gray-800/30 backdrop-blur-lg border-r border-gray-700/50 flex flex-col overflow-y-auto custom-scrollbar"
-      >
-        {/* Room Info */}
-        <div className="p-6 border-b border-gray-700/50">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl flex items-center justify-center">
-              <Code2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-                CODECAST
-              </h2>
-              <p className="text-gray-400 text-sm">Room: DevTeam-001</p>
-            </div>
-          </div>
-          <button
-            onClick={handleShareRoom}
-            className="w-full bg-gradient-to-r from-cyan-500 to-purple-500 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 flex items-center justify-center space-x-2"
-          >
-            <Share2 className="w-4 h-4" />
-            <span>Share Room</span>
-          </button>
-        </div>
-
-        {/* Active Users */}
-        <div className="p-6 border-b border-gray-700/50">
-          <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
-            <Users className="w-5 h-5 text-cyan-400" />
-            <span>Active Users</span>
-            <span className="bg-cyan-500 text-white text-xs px-2 py-1 rounded-full">
-              {activeUsers.length}
-            </span>
-          </h3>
-          <div className="space-y-3">
-            {activeUsers.map((user, index) => (
-              <div
-                key={index}
-                className="flex items-center space-x-3 p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition-colors"
-              >
-                <div
-                  className={`w-3 h-3 rounded-full ${
-                    index === 0 ? "bg-green-400" : "bg-cyan-400"
-                  }`}
+      {isSidebarOpen && (
+        <motion.div
+          initial={{ x: -300 }}
+          animate={{ x: isSidebarOpen ? 0 : -300 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="w-80 bg-gray-800/30 backdrop-blur-lg border-r border-gray-700/50 flex flex-col overflow-y-auto custom-scrollbar"
+        >
+          {/* Room Info */}
+          <div className="p-6 border-b border-gray-700/50">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-20 h-20 rounded-xl flex items-center justify-center">
+                <img
+                  src="../../images/code_editor_logo.png"
+                  alt="Logo"
+                  className="rounded-xl object-cover"
                 />
-                <span className="text-gray-300">{user.username}</span>
-                {index === 0 && (
-                  <span className="text-xs bg-cyan-500/20 text-cyan-300 px-2 py-1 rounded">
-                    admin
-                  </span>
-                )}
               </div>
-            ))}
+              <div>
+                <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                  CODEAURA
+                </h2>
+                {/* <p className="text-gray-400 text-sm">Room: {roomId}</p> */}
+              </div>
+            </div>
+            <button
+              onClick={handleShareRoom}
+              className="w-full bg-gradient-to-r from-cyan-500 to-purple-500 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 flex items-center justify-center space-x-2"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Share Room</span>
+            </button>
           </div>
-        </div>
 
-        {/* Settings */}
-        <div className="p-6 flex-1">
-          <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
-            <Settings className="w-5 h-5 text-cyan-400" />
-            <span>Editor Settings</span>
-          </h3>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Language
-              </label>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="w-full bg-gray-700/50 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-              >
-                {languages.map((lang) => (
-                  <option key={lang} value={lang}>
-                    {lang}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Theme
-              </label>
-              <select
-                value={theme}
-                onChange={(e) => setTheme(e.target.value)}
-                className="w-full bg-gray-700/50 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-              >
-                {themes.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Font Size: {fontSize}px
-              </label>
-              <input
-                type="range"
-                min="12"
-                max="24"
-                value={fontSize}
-                onChange={(e) => setFontSize(parseInt(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-500"
-              />
+          {/* Active Users */}
+          <div className="p-6 border-b border-gray-700/50">
+            <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+              <Users className="w-5 h-5 text-cyan-400" />
+              <span>Active Users</span>
+              <span className="bg-cyan-500 text-white text-xs px-2 py-1 rounded-full">
+                {activeUsers.length}
+              </span>
+            </h3>
+            <div className="space-y-3">
+              {activeUsers.map((user, index) => (
+                <div
+                  key={index}
+                  className="flex items-center space-x-3 p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition-colors"
+                >
+                  <div
+                    className={`w-3 h-3 rounded-full ${
+                      index === 0 ? "bg-green-400" : "bg-cyan-400"
+                    }`}
+                  />
+                  <span className="text-gray-300">{user.username}</span>
+                  {index === 0 && (
+                    <span className="text-xs bg-cyan-500/20 text-cyan-300 px-2 py-1 rounded">
+                      admin
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      </motion.div>
+
+          {/* Settings */}
+          <div className="p-6 flex-1">
+            <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+              <Settings className="w-5 h-5 text-cyan-400" />
+              <span>Editor Settings</span>
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Language
+                </label>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                >
+                  {languages.map((lang) => (
+                    <option key={lang} value={lang}>
+                      {lang}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Theme
+                </label>
+                <select
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                >
+                  {themes.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Font Size: {fontSize}px
+                </label>
+                <input
+                  type="range"
+                  min="12"
+                  max="18"
+                  value={fontSize}
+                  onChange={(e) => setFontSize(parseInt(e.target.value))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-500"
+                />
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
@@ -315,22 +426,14 @@ const EditorPage = () => {
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
           >
-            <Code2 className="w-5 h-5" />
+            {isSidebarOpen ? (
+              <PanelRightOpen className="w-7 h-7 text-cyan-400" />
+            ) : (
+              <PanelRightClose className="w-7 h-7 text-cyan-400" />
+            )}
           </button>
 
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 bg-gray-700/50 rounded-lg p-1">
-              <button className="p-2 hover:bg-gray-600/50 rounded transition-colors">
-                <Monitor className="w-4 h-4" />
-              </button>
-              <button className="p-2 hover:bg-gray-600/50 rounded transition-colors">
-                <Tablet className="w-4 h-4" />
-              </button>
-              <button className="p-2 hover:bg-gray-600/50 rounded transition-colors">
-                <Smartphone className="w-4 h-4" />
-              </button>
-            </div>
-
             <div className="flex items-center space-x-2">
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -338,8 +441,17 @@ const EditorPage = () => {
                 onClick={handleRunCode}
                 className="bg-green-500 hover:bg-green-600 py-2 px-4 rounded-lg font-semibold transition-colors flex items-center space-x-2"
               >
-                <Play className="w-4 h-4" />
-                <span>Run Code</span>
+                {loading ? (
+                  <>
+                    <Loader />
+                    <span>Compiling…</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4" />
+                    <span>Run Code</span>
+                  </>
+                )}
               </motion.button>
 
               <motion.button
@@ -355,10 +467,11 @@ const EditorPage = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="bg-purple-500 hover:bg-purple-600 py-2 px-4 rounded-lg font-semibold transition-colors flex items-center space-x-2"
+                onClick={handleLeaveRoom}
+                className="bg-red-500 hover:bg-red-600 py-2 px-4 rounded-lg font-semibold transition-colors flex items-center space-x-2"
               >
-                <Download className="w-4 h-4" />
-                <span>Export</span>
+                <LogOut className="w-4 h-4" />
+                <span>Leave Room</span>
               </motion.button>
             </div>
           </div>
@@ -367,11 +480,12 @@ const EditorPage = () => {
         {/* Editor and Output */}
         <div className="flex-1 flex">
           {/* Code Editor */}
-          <div className="flex-1 flex flex-col">
+          {/* Code Editor */}
+          <div className="flex-1 flex flex-col min-h-0">
             <div className="p-4 border-b border-gray-700/50">
               <h3 className="text-lg font-semibold">Editor</h3>
             </div>
-            <div className="flex-1 p-4">
+            <div className="flex-1 p-4 min-h-0">
               <textarea
                 id="realTimeEditor"
                 value={code}

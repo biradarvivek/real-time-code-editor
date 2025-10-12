@@ -84,13 +84,13 @@ const Home = () => {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-              className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+              className="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center"
             >
               {/* Replace with your logo */}
               <img
-                src="../../images/SmallSquareLogoJpg.png"
+                src="../../images/code_editor_logo.png"
                 alt="Logo"
-                className="w-10 h-10 object-contain"
+                className="rounded-2xl object-cover"
               />
             </motion.div>
             <p className="text-gray-300 text-lg">Enter the ROOM ID</p>
