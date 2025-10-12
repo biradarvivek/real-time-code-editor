@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const cors = require("cors");
 
 const app = express();
 
@@ -8,6 +9,13 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const userSocketMap = {};
+
+app.use(
+  cors({
+    origin: "real-time-code-editor-two-tau.vercel.app", // <-- frontend URL
+    methods: ["GET", "POST"],
+  })
+);
 
 const getAllConnectedClients = (roomId) => {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
