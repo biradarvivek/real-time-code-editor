@@ -226,19 +226,39 @@ const EditorPage = () => {
 
   const themes = ["dark", "light", "monokai", "dracula"];
 
-  const handleRunCode = async () => {
-    // For JavaScript, run locally
+ const handleRunCode = async () => {
     if (language === "javascript") {
       setLoading(true);
+
       try {
-        const result = eval(code); // sandbox not secure, but fine for local test
-        setOutput(String(result));
-        console.log("set output", result);
+        const logs = [];
+
+        const originalLog = console.log;
+
+        console.log = (...args) => {
+          logs.push(
+            args
+              .map((arg) =>
+                typeof arg === "object"
+                  ? JSON.stringify(arg, null, 2)
+                  : String(arg),
+              )
+              .join(" "),
+          );
+        };
+
+        eval(code);
+
+        console.log = originalLog;
+
+        setOutput(logs.join("\n") || "No output");
       } catch (err) {
+        console.log = console.log;
         setOutput(String(err));
       } finally {
         setLoading(false);
       }
+
       return;
     }
 
